@@ -1,0 +1,128 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+// Requisitos cubiertos:
+// - 500 ciudadanos ficticios (Universo U)
+// - 75 ciudadanos vacunados con Pfizer (conjunto P)
+// - 75 ciudadanos vacunados con AstraZeneca (conjunto A)
+// - Listados obtenidos aplicando operaciones de teoría de conjuntos:
+//   * No vacunados = U \ (P ∪ A)
+//   * Ambas dosis (mezcla de marcas) = P ∩ A   <-- Asunción explicada debajo
+//   * Solo Pfizer = P \ A
+//   * Solo AstraZeneca = A \ P
+// Nota de asunción: "ambas dosis" se interpreta aquí como personas registradas en ambos
+// conjuntos de vacunación de marca (es decir, recibieron dosis de Pfizer y de AstraZeneca).
+// Si su institución requiere "dos dosis de la misma marca", puede cambiar la lógica
+// para generar P_dosis1 y P_dosis2, etc. sin modificar el resto del enfoque de conjuntos.
+
+record Citizen(int Id, string FirstName, string LastName, string City, int Age)
+{
+    public override string ToString() => $"#{Id:D3} - {FirstName} {LastName}, {Age}, {City}";
+}
+
+class Program
+{
+    static void Main()
+    {
+        // --- Parámetros ---
+        const int TOTAL = 500;
+        const int PFIZER_TARGET = 75;
+        const int AZ_TARGET = 75;
+        var rng = new Random(12345); // semilla fija para resultados reproducibles
+
+        // --- Datos base (nombres/ciudades sencillos para la demo) ---
+        string[] firstNames = {
+            "Juan","María","Luis","Ana","Carlos","Lucía","Pedro","Elena","Jorge","Sofía",
+            "Andrés","Camila","David","Daniela","Felipe","Valeria","Miguel","Gabriela","Diego","Karina"
+        };
+        string[] lastNames = {
+            "García","Rodríguez","Martínez","López","González","Pérez","Sánchez","Ramírez","Torres","Flores",
+            "Vargas","Castro","Cruz","Mendoza","Morales","Ortega","Vega","Navarro","Ríos","Suárez"
+        };
+        string[] cities = { "Quito", "Guayaquil", "Cuenca", "Manta", "Loja", "Ambato", "Portoviejo", "Machala" };
+
+        // --- 1) Universo de 500 ciudadanos ---
+        var citizens = Enumerable.Range(1, TOTAL)
+            .Select(id => new Citizen(
+                id,
+                firstNames[rng.Next(firstNames.Length)],
+                lastNames[rng.Next(lastNames.Length)],
+                cities[rng.Next(cities.Length)],
+                rng.Next(18, 81)
+            ))
+            .ToArray();
+
+        var universeIds = new HashSet<int>(citizens.Select(c => c.Id));
+
+        // --- 2) Selección de 75 Pfizer (P) ---
+        var pfizer = PickUnique(universeIds, PFIZER_TARGET, rng);
+
+        // --- 3) Selección de 75 AstraZeneca (A) ---
+        var astra = PickUnique(universeIds, AZ_TARGET, rng);
+
+        // --- Operaciones de teoría de conjuntos ---
+        var unionPA = new HashSet<int>(pfizer);
+        unionPA.UnionWith(astra);
+
+        var interPA = new HashSet<int>(pfizer);
+        interPA.IntersectWith(astra);
+
+        var soloPfizer = new HashSet<int>(pfizer);
+        soloPfizer.ExceptWith(astra);
+
+        var soloAstra = new HashSet<int>(astra);
+        soloAstra.ExceptWith(pfizer);
+
+        var noVacunados = new HashSet<int>(universeIds);
+        noVacunados.ExceptWith(unionPA);
+
+        // --- Salida ---
+        PrintHeader("RESUMEN (cardinalidades)");
+        Console.WriteLine($"Total ciudadanos (U)................: {universeIds.Count}");
+        Console.WriteLine($"Vacunados Pfizer (|P|)..............: {pfizer.Count}");
+        Console.WriteLine($"Vacunados AstraZeneca (|A|).........: {astra.Count}");
+        Console.WriteLine($"Ambas dosis / mezcla (|P ∩ A|)......: {interPA.Count}");
+        Console.WriteLine($"Solo Pfizer (|P \\ A|).............: {soloPfizer.Count}");
+        Console.WriteLine($"Solo AstraZeneca (|A \\ P|)........: {soloAstra.Count}");
+        Console.WriteLine($"No vacunados (|U \\ (P ∪ A)|).......: {noVacunados.Count}\n");
+
+        PrintHeader("LISTADOS SOLICITADOS");
+        PrintList("1) Ciudadanos que NO se han vacunado", noVacunados, citizens);
+        PrintList("2) Ciudadanos con AMBAS dosis (intersección P ∩ A)", interPA, citizens);
+        PrintList("3) Ciudadanos SOLO Pfizer (P \\ A)", soloPfizer, citizens);
+        PrintList("4) Ciudadanos SOLO AstraZeneca (A \\ P)", soloAstra, citizens);
+    }
+
+    static HashSet<int> PickUnique(HashSet<int> universe, int count, Random rng)
+    {
+        if (count > universe.Count) throw new ArgumentException("count > universe size");
+        var chosen = new HashSet<int>();
+        var arr = universe.ToArray();
+        while (chosen.Count < count)
+        {
+            var id = arr[rng.Next(arr.Length)];
+            chosen.Add(id);
+        }
+        return chosen;
+    }
+
+    static void PrintHeader(string title)
+    {
+        Console.WriteLine(new string('=', 80));
+        Console.WriteLine(title);
+        Console.WriteLine(new string('=', 80));
+    }
+
+    static void PrintList(string title, HashSet<int> ids, Citizen[] citizens)
+    {
+        Console.WriteLine();
+        Console.WriteLine(title);
+        Console.WriteLine(new string('-', title.Length));
+        foreach (var c in citizens.Where(c => ids.Contains(c.Id)).OrderBy(c => c.Id))
+        {
+            Console.WriteLine(c);
+        }
+        Console.WriteLine($"Total: {ids.Count}\n");
+    }
+}
